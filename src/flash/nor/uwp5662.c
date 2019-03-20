@@ -16,7 +16,7 @@
  ***************************************************************************/
 
 #include <helper/types.h>
-#include "uwp5661.h"
+#include "uwp5662.h"
 
 static uint32_t cmd_info_buf_cache[INFO_BUF_MAX] = {0};
 static uint32_t prev_cmd_info_buf_cache[INFO_BUF_MAX] = {0};
@@ -24,7 +24,7 @@ static uint32_t cmd_buf_cache_bitmap  = 0xFFF;
 static uint32_t sfc_cmd_cfg_cache = 0xFFFFFFFF;
 
 #ifdef NEW_WRITE_PAGE
-static void uwp5661_init_sw_csn(struct target *target)
+static void uwp5662_init_sw_csn(struct target *target)
 {
 	uint32_t rd_dat = 0;
 	/* GPIO init for faster programming */
@@ -49,16 +49,16 @@ static void uwp5661_init_sw_csn(struct target *target)
 	target_write_u32(target, REG_AON_GPIO1_RF_GPIO_VAL, rd_dat);
 }
 
-static void uwp5661_force_csn(struct target *target, uint32_t op)
+static void uwp5662_force_csn(struct target *target, uint32_t op)
 {
 	if (op == TRUE)
-		target_write_u32(target, REG_AON_PIN_RF_ESMCSN_CFG, 0x00008130);
+		target_write_u32(target, REG_AON_PIN_RF_ESMCSN_CFG, 0x00000030);
 	else
-		target_write_u32(target, REG_AON_PIN_RF_ESMCSN_CFG, 0x00008100);
+		target_write_u32(target, REG_AON_PIN_RF_ESMCSN_CFG, 0x00000000);
 }
 #endif
 
-static void uwp5661_set_sfc_clk(struct target *target)
+static void uwp5662_set_sfc_clk(struct target *target)
 {
 	target_write_u32(target, SFC_CLK_CFG,                   0x00000780);
 	target_write_u32(target, REG_AON_CLK_RF_CGM_SFC_1X_CFG, 0x00000100);
@@ -367,7 +367,7 @@ static void spiflash_enter_xip(struct target *target, uint8_t support_4addr)
 	target_write_u32(target, SFC_TYPE_BUF2, 0x00000000);
 	SFCDRV_SetCMDCfgReg(target, CMD_MODE_READ , BIT_MODE_1, INI_CMD_BUF_7);
 	target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, 0x00000100);
-	target_write_u32(target, REG_AON_CLK_RF_CGM_ARM_CFG, 0x00000000);
+	target_write_u32(target, REG_AON_CLK_RF_CGM_ARM_CFG, 0x00000001);
 	target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, 0x00000000);
 	LOG_DEBUG("Enter XIP");
 }
@@ -376,7 +376,7 @@ static void spiflash_exit_xip(struct target *target)
 {
 	SFCDRV_SetCMDCfgReg(target, CMD_MODE_WRITE, BIT_MODE_1, INI_CMD_BUF_7);
 	target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, 0x00000100);
-	target_write_u32(target, REG_AON_CLK_RF_CGM_ARM_CFG, 0x00000000);
+	target_write_u32(target, REG_AON_CLK_RF_CGM_ARM_CFG, 0x00000001);
 	target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, 0x00000000);
 	LOG_DEBUG("Exit XIP");
 }
@@ -554,9 +554,9 @@ static int spiflash_cmd_sector_erase(struct target *target, struct uwp_flash *fl
 	return ret;
 }
 
-static int uwp5661_erase(struct flash_bank *bank, int first, int last)
+static int uwp5662_erase(struct flash_bank *bank, int first, int last)
 {
-	struct uwp5661_flash_bank *uwp_bank = bank->driver_priv;
+	struct uwp5662_flash_bank *uwp_bank = bank->driver_priv;
 	struct target *target = bank->target;
 	struct uwp_flash *flash = &(uwp_bank->flash);
 	int i = 0;
@@ -570,16 +570,16 @@ static int uwp5661_erase(struct flash_bank *bank, int first, int last)
 	}
 
 #ifdef NEW_WRITE_PAGE
-	uwp5661_init_sw_csn(target);
+	uwp5662_init_sw_csn(target);
 #endif
-	uwp5661_set_sfc_clk(target);
+	uwp5662_set_sfc_clk(target);
 
 	spiflash_select_xip(target, FALSE, FALSE);
 
 	if (flash->support_4addr == TRUE) {
 		ret = spiflash_4addr_enable(target, flash);
 		if (ret != ERROR_OK) {
-			LOG_ERROR("uwp5661 SPI 4Byte Address mode switching ON failed!\n");
+			LOG_ERROR("uwp5662 SPI 4Byte Address mode switching ON failed!\n");
 			spiflash_reset_anyway(target, NULL);
 			spiflash_select_xip(target, FALSE, TRUE);
 			return ret;
@@ -605,7 +605,7 @@ static int uwp5661_erase(struct flash_bank *bank, int first, int last)
 	if (flash->support_4addr == TRUE) {
 		ret = spiflash_4addr_disable(target, flash);
 		if (ret != ERROR_OK) {
-			LOG_ERROR("uwp5661 SPI 4Byte Address mode switching OFF failed!\n");
+			LOG_ERROR("uwp5662 SPI 4Byte Address mode switching OFF failed!\n");
 			spiflash_reset_anyway(target, NULL);
 		}
 	}
@@ -640,7 +640,7 @@ static int spiflash_write_page(struct target *target, struct uwp_flash *flash,
 			spiflash_write_enable(target, flash);
 
 #ifdef NEW_WRITE_PAGE
-			uwp5661_force_csn(target, TRUE);
+			uwp5662_force_csn(target, TRUE);
 #else
 			dest_addr = addr;
 #endif
@@ -697,18 +697,18 @@ static int spiflash_write_page(struct target *target, struct uwp_flash *flash,
 		i = i + piece_cnt;
 	}
 #ifdef NEW_WRITE_PAGE
-	uwp5661_force_csn(target, FALSE);
+	uwp5662_force_csn(target, FALSE);
 
 	ret = spiflash_cmd_poll_bit(target, flash, SPI_FLASH_PAGE_PROG_TIMEOUT, CMD_READ_STATUS1, STATUS_WIP, 0);
 #endif
 	return ret;
 }
 
-static int uwp5661_write(struct flash_bank *bank, const uint8_t *buffer,
+static int uwp5662_write(struct flash_bank *bank, const uint8_t *buffer,
 			uint32_t offset, uint32_t count)
 {
-	struct uwp5661_flash_bank *uwp5661_info = bank->driver_priv;
-	struct uwp_flash *flash = &(uwp5661_info->flash);
+	struct uwp5662_flash_bank *uwp5662_info = bank->driver_priv;
+	struct uwp_flash *flash = &(uwp5662_info->flash);
 	struct target *target = bank->target;
 	uint32_t page_size = flash->page_size;
 	uint32_t page_addr = 0;
@@ -727,16 +727,16 @@ static int uwp5661_write(struct flash_bank *bank, const uint8_t *buffer,
 	}
 
 #ifdef NEW_WRITE_PAGE
-	uwp5661_init_sw_csn(target);
+	uwp5662_init_sw_csn(target);
 #endif
-	uwp5661_set_sfc_clk(target);
+	uwp5662_set_sfc_clk(target);
 
 	spiflash_select_xip(target, FALSE, FALSE);
 
 	if (flash->support_4addr == TRUE) {
 		ret = spiflash_4addr_enable(target, flash);
 		if (ret != ERROR_OK) {
-			LOG_ERROR("uwp5661 SPI 4Byte Address mode switching ON failed!\n");
+			LOG_ERROR("uwp5662 SPI 4Byte Address mode switching ON failed!\n");
 			spiflash_reset_anyway(target, NULL);
 			spiflash_select_xip(target, FALSE, TRUE);
 			return ret;
@@ -777,7 +777,7 @@ static int uwp5661_write(struct flash_bank *bank, const uint8_t *buffer,
 	if (flash->support_4addr == TRUE) {
 		ret = spiflash_4addr_disable(target, flash);
 		if (ret != ERROR_OK) {
-			LOG_ERROR("uwp5661 SPI 4Byte Address mode switching OFF failed!\n");
+			LOG_ERROR("uwp5662 SPI 4Byte Address mode switching OFF failed!\n");
 			spiflash_reset_anyway(target, NULL);
 		}
 	}
@@ -802,7 +802,7 @@ static void spiflash_data_read(struct target *target, struct uwp_flash *flash,
 	for (i = 0; i < count;) {
 		piece_cnt = min(count - i, 256-(addr%256));
 
-		target_read_memory(target, UWP5661_FLASH_BASE_ADDRESS+(addr&0xFFFFFF00), 4, 64, tmp_buf);
+		target_read_memory(target, UWP5662_FLASH_BASE_ADDRESS+(addr&0xFFFFFF00), 4, 64, tmp_buf);
 
 		memcpy(data_ptr, tmp_buf+(addr%256), piece_cnt);
 
@@ -818,11 +818,11 @@ static void spiflash_data_read(struct target *target, struct uwp_flash *flash,
 	}
 }
 
-static int uwp5661_read(struct flash_bank *bank, uint8_t *buffer,
+static int uwp5662_read(struct flash_bank *bank, uint8_t *buffer,
 			uint32_t offset, uint32_t count)
 {
-	struct uwp5661_flash_bank *uwp5661_info = bank->driver_priv;
-	struct uwp_flash *flash = &(uwp5661_info->flash);
+	struct uwp5662_flash_bank *uwp5662_info = bank->driver_priv;
+	struct uwp_flash *flash = &(uwp5662_info->flash);
 	struct target *target = bank->target;
 	int ret = ERROR_OK;
 
@@ -832,16 +832,16 @@ static int uwp5661_read(struct flash_bank *bank, uint8_t *buffer,
 	}
 
 #ifdef NEW_WRITE_PAGE
-	uwp5661_init_sw_csn(target);
+	uwp5662_init_sw_csn(target);
 #endif
-	uwp5661_set_sfc_clk(target);
+	uwp5662_set_sfc_clk(target);
 
 	spiflash_select_xip(target, flash->support_4addr, TRUE);
 
 	if (flash->support_4addr == TRUE) {
 		ret = spiflash_4addr_enable(target, flash);
 		if (ret != ERROR_OK) {
-			LOG_ERROR("uwp5661 SPI 4Byte Address mode switching ON failed!\n");
+			LOG_ERROR("uwp5662 SPI 4Byte Address mode switching ON failed!\n");
 			spiflash_reset_anyway(target, NULL);
 			spiflash_select_xip(target, FALSE, TRUE);
 			return ret;
@@ -854,7 +854,7 @@ static int uwp5661_read(struct flash_bank *bank, uint8_t *buffer,
 	if (flash->support_4addr == TRUE) {
 		ret = spiflash_4addr_disable(target, flash);
 		if (ret != ERROR_OK) {
-			LOG_ERROR("uwp5661 SPI 4Byte Address mode switching OFF failed!\n");
+			LOG_ERROR("uwp5662 SPI 4Byte Address mode switching OFF failed!\n");
 			spiflash_reset_anyway(target, NULL);
 			spiflash_select_xip(target, FALSE, TRUE);
 			return ret;
@@ -941,15 +941,15 @@ static int init_flash(struct flash_bank *bank, struct target *target, struct uwp
 	return ERROR_OK;
 }
 
-static int uwp5661_probe(struct flash_bank *bank)
+static int uwp5662_probe(struct flash_bank *bank)
 {
-	struct uwp5661_flash_bank *uwp5661_info = bank->driver_priv;
+	struct uwp5662_flash_bank *uwp5662_info = bank->driver_priv;
 	struct target *target = bank->target;
-	struct uwp_flash *flash = &(uwp5661_info->flash);
+	struct uwp_flash *flash = &(uwp5662_info->flash);
 	int ret = ERROR_OK;
 
-	bank->base = UWP5661_FLASH_BASE_ADDRESS;
-	uwp5661_info->probed = 0;
+	bank->base = UWP5662_FLASH_BASE_ADDRESS;
+	uwp5662_info->probed = 0;
 
 	memset(prev_cmd_info_buf_cache, 0 , sizeof(prev_cmd_info_buf_cache));
 
@@ -959,10 +959,10 @@ static int uwp5661_probe(struct flash_bank *bank)
 	}
 
 #ifdef NEW_WRITE_PAGE
-	uwp5661_init_sw_csn(target);
-	uwp5661_force_csn(target, FALSE);
+	uwp5662_init_sw_csn(target);
+	uwp5662_force_csn(target, FALSE);
 #endif
-	uwp5661_set_sfc_clk(target);
+	uwp5662_set_sfc_clk(target);
 
 	spiflash_select_xip(target, FALSE, FALSE);
 
@@ -970,65 +970,65 @@ static int uwp5661_probe(struct flash_bank *bank)
 
 	spiflash_reset_anyway(target, NULL);
 
-	ret = init_flash(bank, target, flash, &(uwp5661_info->param));
+	ret = init_flash(bank, target, flash, &(uwp5662_info->param));
 	if (ret != ERROR_OK) {
-		LOG_ERROR("uwp5661 SPI flash init failed!\n");
+		LOG_ERROR("uwp5662 SPI flash init failed!\n");
 		return ret;
 	}
 
-	uwp5661_info->probed = 1;
+	uwp5662_info->probed = 1;
 
 	spiflash_select_xip(target, FALSE, TRUE);
 
 	return ret;
 }
 
-static int uwp5661_auto_probe(struct flash_bank *bank)
+static int uwp5662_auto_probe(struct flash_bank *bank)
 {
-	return uwp5661_probe(bank);
+	return uwp5662_probe(bank);
 }
 
-static const struct command_registration uwp5661_exec_command_handlers[] = {
+static const struct command_registration uwp5662_exec_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
-static const struct command_registration uwp5661_command_handlers[] = {
+static const struct command_registration uwp5662_command_handlers[] = {
 	{
-		.name = "uwp5661",
+		.name = "uwp5662",
 		.mode = COMMAND_ANY,
-		.help = "uwp5661 flash command group",
+		.help = "uwp5662 flash command group",
 		.usage = "",
-		.chain = uwp5661_exec_command_handlers,
+		.chain = uwp5662_exec_command_handlers,
 	},
 	COMMAND_REGISTRATION_DONE
 };
 
-FLASH_BANK_COMMAND_HANDLER(uwp5661_flash_bank_command)
+FLASH_BANK_COMMAND_HANDLER(uwp5662_flash_bank_command)
 {
-	struct uwp5661_flash_bank *uwp5661_info = NULL;
+	struct uwp5662_flash_bank *uwp5662_info = NULL;
 
 	if (CMD_ARGC < 6)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	uwp5661_info = malloc(sizeof(struct uwp5661_flash_bank));
+	uwp5662_info = malloc(sizeof(struct uwp5662_flash_bank));
 
-	if (uwp5661_info == NULL)
+	if (uwp5662_info == NULL)
 		return ERROR_FAIL;
 
-	bank->driver_priv = uwp5661_info;
-	uwp5661_info->probed = 0;
+	bank->driver_priv = uwp5662_info;
+	uwp5662_info->probed = 0;
 
 	return ERROR_OK;
 }
 
-struct flash_driver uwp5661_flash = {
-	.name = "uwp5661",
-	.commands = uwp5661_command_handlers,
-	.flash_bank_command = uwp5661_flash_bank_command,
-	.erase = uwp5661_erase,
-	.write = uwp5661_write,
-	.read = uwp5661_read,
-	.probe = uwp5661_probe,
-	.auto_probe = uwp5661_auto_probe,
+struct flash_driver uwp5662_flash = {
+	.name = "uwp5662",
+	.commands = uwp5662_command_handlers,
+	.flash_bank_command = uwp5662_flash_bank_command,
+	.erase = uwp5662_erase,
+	.write = uwp5662_write,
+	.read = uwp5662_read,
+	.probe = uwp5662_probe,
+	.auto_probe = uwp5662_auto_probe,
 	.free_driver_priv = default_flash_free_driver_priv,
 };

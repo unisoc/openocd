@@ -423,6 +423,22 @@ static int is_bad_irval(int ir_length, jim_wide w)
 	return (w & v) != 0;
 }
 
+static int jim_newtap_targetsel(Jim_Nvp *n, Jim_GetOptInfo *goi,
+       struct jtag_tap *pTap)
+{
+		jim_wide w;
+		int e = Jim_GetOpt_Wide(goi, &w);
+		if (e != JIM_OK) {
+			Jim_SetResultFormatted(goi->interp, "option: %s bad parameter", n->name);
+			return e;
+		}
+
+		pTap->targetsel_id = w;
+		pTap->hasmultidrop = true;
+
+		return JIM_OK;
+}
+
 static int jim_newtap_expected_id(Jim_Nvp *n, Jim_GetOptInfo *goi,
 	struct jtag_tap *pTap)
 {
@@ -453,6 +469,7 @@ static int jim_newtap_expected_id(Jim_Nvp *n, Jim_GetOptInfo *goi,
 #define NTAP_OPT_DISABLED  4
 #define NTAP_OPT_EXPECTED_ID 5
 #define NTAP_OPT_VERSION   6
+#define NTAP_OPT_TARGETSEL 7
 
 static int jim_newtap_ir_param(Jim_Nvp *n, Jim_GetOptInfo *goi,
 	struct jtag_tap *pTap)
@@ -505,6 +522,7 @@ static int jim_newtap_cmd(Jim_GetOptInfo *goi)
 	struct jtag_tap *pTap;
 	int x;
 	int e;
+	jim_wide w;
 	Jim_Nvp *n;
 	char *cp;
 	const Jim_Nvp opts[] = {
@@ -515,6 +533,7 @@ static int jim_newtap_cmd(Jim_GetOptInfo *goi)
 		{ .name = "-disable",       .value = NTAP_OPT_DISABLED },
 		{ .name = "-expected-id",       .value = NTAP_OPT_EXPECTED_ID },
 		{ .name = "-ignore-version",       .value = NTAP_OPT_VERSION },
+		{ .name = "-targetsel",       .value = NTAP_OPT_TARGETSEL },
 		{ .name = NULL,       .value = -1 },
 	};
 
@@ -545,11 +564,48 @@ static int jim_newtap_cmd(Jim_GetOptInfo *goi)
 	cp = malloc(x);
 	sprintf(cp, "%s.%s", pTap->chip, pTap->tapname);
 	pTap->dotted_name = cp;
+	pTap->hasmultidrop = false;
 
 	LOG_DEBUG("Creating New Tap, Chip: %s, Tap: %s, Dotted: %s, %d params",
 		pTap->chip, pTap->tapname, pTap->dotted_name, goi->argc);
 
 	if (!transport_is_jtag()) {
+		while (goi->argc) {
+			e = Jim_GetOpt_Nvp(goi, opts, &n);
+			if (e != JIM_OK) {
+				Jim_GetOpt_NvpUnknown(goi, opts, 0);
+				free(cp);
+				free(pTap);
+				return e;
+			}
+			LOG_DEBUG("Processing option: %s", n->name);
+			switch (n->value) {
+				case NTAP_OPT_ENABLED:
+				case NTAP_OPT_DISABLED:
+				case NTAP_OPT_VERSION:
+					break;
+				case NTAP_OPT_EXPECTED_ID:
+				case NTAP_OPT_IRLEN:
+				case NTAP_OPT_IRMASK:
+				case NTAP_OPT_IRCAPTURE:
+					e = Jim_GetOpt_Wide(goi, &w);
+					if (e != JIM_OK) {
+						Jim_SetResultFormatted(goi->interp,
+							"option: %s bad parameter", n->name);
+						return e;
+					}
+					break;
+				case NTAP_OPT_TARGETSEL:
+					e = jim_newtap_targetsel(n, goi, pTap);
+					if (JIM_OK != e) {
+						free(cp);
+						free(pTap);
+						return e;
+					}
+					break;
+            }	/* switch (n->value) */
+        }	/* while (goi->argc) */
+
 		/* SWD doesn't require any JTAG tap parameters */
 		pTap->enabled = true;
 		jtag_tap_init(pTap);

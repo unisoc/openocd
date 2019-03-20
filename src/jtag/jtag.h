@@ -142,6 +142,11 @@ struct jtag_tap {
 	/** Number of expected identification codes */
 	uint8_t expected_ids_cnt;
 
+	/** whether multidrop feature of DPv2 is enabled */
+	bool hasmultidrop;
+	/** 4bit instance_id + 28bit target_id */
+	uint32_t targetsel_id;
+
 	/** Flag saying whether to ignore version field in expected_ids[] */
 	bool ignore_version;
 

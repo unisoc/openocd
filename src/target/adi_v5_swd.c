@@ -75,7 +75,7 @@ static void swd_clear_sticky_errors(struct adiv5_dap *dap)
 	assert(swd);
 
 	swd->write_reg(swd_cmd(false,  false, DP_ABORT),
-		STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR, 0);
+		DAPABORT | STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR, 0);
 }
 
 static int swd_run_inner(struct adiv5_dap *dap)
@@ -118,6 +118,16 @@ static int swd_connect(struct adiv5_dap *dap)
 		}
 	}
 
+	if (dap->tap->hasmultidrop) {
+		/* Clear link state, including the SELECT cache. */
+		dap->do_reconnect = false;
+		dap_invalidate_cache(dap);
+		swd->switch_seq(LINE_RESET);
+		swd_queue_dp_write(dap, DP_TARGETSEL, dap->tap->targetsel_id);
+		swd_run_inner(dap);
+		LOG_INFO("Multidrop is enabled, using targetsel_id: %#8.8" PRIx32, dap->tap->targetsel_id);
+	}
+
 	/* Note, debugport_init() does setup too */
 	swd->switch_seq(JTAG_TO_SWD);
 
@@ -136,9 +146,10 @@ static int swd_connect(struct adiv5_dap *dap)
 		LOG_INFO("SWD DPIDR %#8.8" PRIx32, dpidr);
 		dap->do_reconnect = false;
 		status = dap_dp_init(dap);
-	} else
+	} else {
 		dap->do_reconnect = true;
-
+		LOG_INFO("SWD DPIDR ERROR");
+	}
 	return status;
 }
 
@@ -149,9 +160,10 @@ static inline int check_sync(struct adiv5_dap *dap)
 
 static int swd_check_reconnect(struct adiv5_dap *dap)
 {
-	if (dap->do_reconnect)
+	if (dap->do_reconnect) {
+		LOG_INFO("Do reconnect!");
 		return swd_connect(dap);
-
+	}
 	return ERROR_OK;
 }
 

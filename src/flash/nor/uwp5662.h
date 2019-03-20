@@ -15,8 +15,8 @@
  *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
-#ifndef UWP5661_H
-#define UWP5661_H
+#ifndef UWP5662_H
+#define UWP5662_H
 
 #include "imp.h"
 #include <helper/binarybuffer.h>
@@ -56,7 +56,7 @@
 #define SPI_FLASH_PAGE_PROG_TIMEOUT         (20  * CONFIG_SYS_HZ)
 #define SPI_FLASH_SECTOR_ERASE_TIMEOUT      (125 * CONFIG_SYS_HZ)
 
-#define UWP5661_FLASH_BASE_ADDRESS    0x2000000
+#define UWP5662_FLASH_BASE_ADDRESS    0x2000000
 
 #define BASE_AON_GPIO1_REG      0x40808000
 #define BASE_AON_GLB_REG        0x4083C000
@@ -69,11 +69,11 @@
 #define REG_AON_GPIO1_RF_GPIO_DIR           (BASE_AON_GPIO1_REG + 0x0008)
 #define REG_AON_GLB_RF_GPIO_MODE1           (BASE_AON_GLB_REG + 0x020c)
 #define REG_AON_GLB_RF_APB_EB_SET           (BASE_AON_GLB_REG + 0x1024)
-#define REG_AON_PIN_RF_ESMCSN_CFG           (BASE_AON_PIN_REG + 0x0030)
+#define REG_AON_PIN_RF_ESMCSN_CFG           (BASE_AON_PIN_REG + 0x0090)
 #define REG_AON_CLK_RF_CGM_ARM_CFG          (BASE_AON_CLK_REG + 0x0020)
 #define REG_AON_CLK_RF_CGM_MTX_CFG          (BASE_AON_CLK_REG + 0x0024)
-#define REG_AON_CLK_RF_CGM_SFC_2X_CFG       (BASE_AON_CLK_REG + 0x0030)
-#define REG_AON_CLK_RF_CGM_SFC_1X_CFG       (BASE_AON_CLK_REG + 0x0034)
+#define REG_AON_CLK_RF_CGM_SFC_2X_CFG       (BASE_AON_CLK_REG + 0x002c)
+#define REG_AON_CLK_RF_CGM_SFC_1X_CFG       (BASE_AON_CLK_REG + 0x0030)
 
 #define SFC_CMD_CFG         (BASE_AON_SFC_CFG + 0x0000)
 #define SFC_SOFT_REQ        (BASE_AON_SFC_CFG + 0x0004)
@@ -384,7 +384,7 @@ struct uwp_flash {
 	int spi_rw_mode;
 };
 
-struct uwp5661_flash_bank {
+struct uwp5662_flash_bank {
 	int probed;
 	uint32_t id;
 	const struct uwp_flash_param *param;
@@ -448,4 +448,4 @@ static struct spi_flash_spec_s spi_flash_spec_table[] = {
 	},
 };
 
-#endif /* UWP5661_H */
+#endif /* UWP5662_H */
