@@ -50,6 +50,7 @@
 #define STATUS_ADS		BIT(0)
 
 #define CONFIG_SYS_HZ                       1000
+#define CACHE_CMD_TIMEOUT                   (1   * CONFIG_SYS_HZ)
 #define SFC_DRVREQ_TIMEOUT                  (1   * CONFIG_SYS_HZ)
 #define SPI_FLASH_WEL_TIMEOUT               (2   * CONFIG_SYS_HZ)
 #define SPI_FLASH_ADS_TIMEOUT               (2   * CONFIG_SYS_HZ)
