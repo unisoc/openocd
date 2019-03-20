@@ -58,16 +58,29 @@
 
 #define UWP5662_FLASH_BASE_ADDRESS    0x2000000
 
+#define BASE_ICACHE_REG         0x401C0000
+#define BASE_DCACHE_REG         0x401E0000
 #define BASE_AON_GPIO1_REG      0x40808000
 #define BASE_AON_GLB_REG        0x4083C000
 #define BASE_AON_PIN_REG        0x40840000
 #define BASE_AON_CLK_REG        0x40844200
 #define BASE_AON_SFC_CFG        0x40890000
 
+#define REG_ICACHE_CFG0                     (BASE_ICACHE_REG + 0x0000)
+#define REG_ICACHE_CMD_CFG2                 (BASE_ICACHE_REG + 0x0058)
+#define REG_ICACHE_INT_EN                   (BASE_ICACHE_REG + 0x0060)
+#define REG_ICACHE_INT_RAW_STS              (BASE_ICACHE_REG + 0x0064)
+#define REG_ICACHE_INT_CLR                  (BASE_ICACHE_REG + 0x006C)
+#define REG_DCACHE_CFG0                     (BASE_DCACHE_REG + 0x0000)
+#define REG_DCACHE_CMD_CFG2                 (BASE_DCACHE_REG + 0x0058)
+#define REG_DCACHE_INT_EN                   (BASE_DCACHE_REG + 0x0060)
+#define REG_DCACHE_INT_RAW_STS              (BASE_DCACHE_REG + 0x0064)
+#define REG_DCACHE_INT_CLR                  (BASE_DCACHE_REG + 0x006C)
+
 #define REG_AON_GPIO1_RF_GPIO_VAL           (BASE_AON_GPIO1_REG + 0x0000)
 #define REG_AON_GPIO1_RF_GPIO_MSK           (BASE_AON_GPIO1_REG + 0x0004)
 #define REG_AON_GPIO1_RF_GPIO_DIR           (BASE_AON_GPIO1_REG + 0x0008)
-#define REG_AON_GLB_RF_GPIO_MODE1           (BASE_AON_GLB_REG + 0x020c)
+#define REG_AON_GLB_RF_GPIO_MODE1           (BASE_AON_GLB_REG + 0x020C)
 #define REG_AON_GLB_RF_APB_EB_SET           (BASE_AON_GLB_REG + 0x1024)
 #define REG_AON_PIN_RF_ESMCSN_CFG           (BASE_AON_PIN_REG + 0x0090)
 #define REG_AON_CLK_RF_CGM_ARM_CFG          (BASE_AON_CLK_REG + 0x0020)

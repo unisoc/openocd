@@ -346,6 +346,39 @@ static void spiflash_read_write(struct target *target, SFC_CMD_DES_T *cmd_des_pt
 		SFCDRV_GetReadBuf(target, din, read_count);
 }
 
+static void spiflash_disable_cache(struct target *target)
+{
+	uint32_t int_status = 0;
+	uint32_t int_timeout = 0;
+
+	target_write_u32(target, REG_ICACHE_INT_EN, 0x00000000);
+	target_write_u32(target, REG_ICACHE_INT_CLR, 0x00000001);
+	target_write_u32(target, REG_ICACHE_CMD_CFG2, 0x80000004);	/* invalid all */
+	do {
+		target_read_u32(target, REG_ICACHE_INT_RAW_STS, &int_status);
+		if (int_timeout++ > CACHE_CMD_TIMEOUT) {
+			LOG_ERROR("ICache invalid time out!\n");
+			break;
+		}
+	} while ((int_status & BIT(0)) == 0);
+	target_write_u32(target, REG_ICACHE_INT_CLR, 0x00000001);
+	target_write_u32(target, REG_ICACHE_CFG0, 0x00000000);	/* disable all */
+
+	int_timeout = 0;
+	target_write_u32(target, REG_DCACHE_INT_EN, 0x00000000);
+	target_write_u32(target, REG_DCACHE_INT_CLR, 0x00000001);
+	target_write_u32(target, REG_DCACHE_CMD_CFG2, 0x80000008);	/* clean and invalid all */
+	do {
+		target_read_u32(target, REG_DCACHE_INT_RAW_STS, &int_status);
+		if (int_timeout++ > CACHE_CMD_TIMEOUT) {
+			LOG_ERROR("DCache clean and invalid time out!\n");
+			break;
+		}
+	} while ((int_status & BIT(0)) == 0);
+	target_write_u32(target, REG_DCACHE_INT_CLR, 0x00000001);
+	target_write_u32(target, REG_DCACHE_CFG0, 0x00000000);	/* disable all */
+}
+
 static void spiflash_enter_xip(struct target *target, uint8_t support_4addr)
 {
 	uint32_t i = 0;
@@ -369,6 +402,9 @@ static void spiflash_enter_xip(struct target *target, uint8_t support_4addr)
 	target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, 0x00000100);
 	target_write_u32(target, REG_AON_CLK_RF_CGM_ARM_CFG, 0x00000001);
 	target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, 0x00000000);
+
+	spiflash_disable_cache(target);
+
 	LOG_DEBUG("Enter XIP");
 }
 
