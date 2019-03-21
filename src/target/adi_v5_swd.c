@@ -118,6 +118,9 @@ static int swd_connect(struct adiv5_dap *dap)
 		}
 	}
 
+	/* Note, debugport_init() does setup too */
+	swd->switch_seq(JTAG_TO_SWD);
+
 	if (dap->tap->hasmultidrop) {
 		/* Clear link state, including the SELECT cache. */
 		dap->do_reconnect = false;
@@ -127,9 +130,6 @@ static int swd_connect(struct adiv5_dap *dap)
 		swd_run_inner(dap);
 		LOG_INFO("Multidrop is enabled, using targetsel_id: %#8.8" PRIx32, dap->tap->targetsel_id);
 	}
-
-	/* Note, debugport_init() does setup too */
-	swd->switch_seq(JTAG_TO_SWD);
 
 	/* Clear link state, including the SELECT cache. */
 	dap->do_reconnect = false;
