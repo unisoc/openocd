@@ -624,13 +624,13 @@ static int uwp5662_erase(struct flash_bank *bank, int first, int last)
 
 	LOG_INFO("Flash Erase");
 	uint32_t cur_ratio = 0;
-	uint32_t prv_ratio = 0;
+	uint32_t prev_ratio = 0xFF;
 	for (i = first; i <= last; i++) {
 		ret = spiflash_cmd_sector_erase(target, flash, i);
 		cur_ratio = (i-first+1)*100/(last-first+1);
-		if ((cur_ratio/10) != (prv_ratio/10)) {
+		if (((cur_ratio/10) != (prev_ratio/10)) && (cur_ratio != 0)) {
 			LOG_INFO("\rFlash Erase %3d%%", cur_ratio);
-			prv_ratio = cur_ratio;
+			prev_ratio = cur_ratio;
 		}
 		if (ret != ERROR_OK)
 			return ret;
@@ -786,7 +786,7 @@ static int uwp5662_write(struct flash_bank *bank, const uint8_t *buffer,
 
 	LOG_INFO("Flash Write");
 	uint32_t cur_ratio = 0;
-	uint32_t prv_ratio = 0;
+	uint32_t prev_ratio = 0xFF;
 	for (actual = 0; actual < count; ) {
 		data_len = count - actual;
 		space_len = page_size - byte_addr;
@@ -804,9 +804,9 @@ static int uwp5662_write(struct flash_bank *bank, const uint8_t *buffer,
 		byte_addr = 0;
 		actual += chunk_len;
 		cur_ratio = actual*100/count;
-		if ((cur_ratio/10) != (prv_ratio/10)) {
+		if (((cur_ratio/10) != (prev_ratio/10)) && (cur_ratio != 0)) {
 			LOG_INFO("\rFlash Write %3d%%", cur_ratio);
-			prv_ratio = cur_ratio;
+			prev_ratio = cur_ratio;
 		}
 	}
 
@@ -833,7 +833,7 @@ static void spiflash_data_read(struct target *target, struct uwp_flash *flash,
 	uint8_t tmp_buf[256] = {0};
 	uint8_t *data_ptr = buf;
 	uint32_t cur_ratio = 0;
-	uint32_t prv_ratio = 0;
+	uint32_t prev_ratio = 0xFF;
 
 	for (i = 0; i < count;) {
 		piece_cnt = min(count - i, 256-(addr%256));
@@ -847,9 +847,9 @@ static void spiflash_data_read(struct target *target, struct uwp_flash *flash,
 		data_ptr = data_ptr + piece_cnt;
 
 		cur_ratio = i*100/count;
-		if ((cur_ratio/10) != (prv_ratio/10)) {
+		if (((cur_ratio/10) != (prev_ratio/10)) && (cur_ratio != 0)) {
 			LOG_INFO("\rFlash Read %3d%%", cur_ratio);
-			prv_ratio = cur_ratio;
+			prev_ratio = cur_ratio;
 		}
 	}
 }
