@@ -137,12 +137,12 @@ static int sfcdrv_req(struct target *target)
 static int sfcdrv_int_cfg(struct target *target, uint32_t op)
 {
 	int retval = ERROR_OK;
-	if (op == true) {  /* for CS1 interrupt */
-		retval = target_write_u32(target, SFC_IEN, CS1_INT);
+	if (op == true) {  /* Enable interrupt */
+		retval = target_write_u32(target, SFC_IEN, INT_EN);
 		if (retval != ERROR_OK)
 			return retval;
-	} else { /* for CS0 interrupt */
-		retval = target_write_u32(target, SFC_IEN, CS0_INT);
+	} else { /* Disable interrupt */
+		retval = target_write_u32(target, SFC_IEN, INT_DIS);
 		if (retval != ERROR_OK)
 			return retval;
 	}
@@ -228,6 +228,8 @@ static int sfcdrv_get_read_buf(struct uwp5661_flash_bank *uwp5661_info, struct t
 	retval = target_read_memory(target, SFC_CMD_BUF0+read_buf_index*4, 4, word_cnt, tmp_buf);
 	if (retval != ERROR_OK)
 		return retval;
+
+	buf_bswap32(tmp_buf, tmp_buf, word_cnt*4);
 	for (i = 0; i < word_cnt; i++)
 		buffer[i] = target_buffer_get_u32(target, tmp_buf+i*4);
 
@@ -405,98 +407,6 @@ static int uwp5661_disable_cache(struct target *target)
 	return retval;
 }
 
-static int uwp5661_enter_xip(struct uwp5661_flash_bank *uwp5661_info, struct target *target, uint8_t support_4addr)
-{
-	int retval = ERROR_OK;
-	uint32_t i = 0;
-	struct sfc_cmd_des cmd_desc[3];
-
-	create_cmd(&(cmd_desc[0]), CMD_FAST_READ, BYTE_NUM_1, CMD_MODE_WRITE, BIT_MODE_1, SEND_MODE_0);
-	create_cmd(&(cmd_desc[1]), 0x0          , (support_4addr == true) ? BYTE_NUM_4 : BYTE_NUM_3,
-															CMD_MODE_WRITE, BIT_MODE_1, SEND_MODE_1);
-	create_cmd(&(cmd_desc[2]), 0x0          , BYTE_NUM_1, CMD_MODE_HIGHZ, BIT_MODE_1, SEND_MODE_0);
-
-	for (i = 0; i < 3; i++) {
-		retval = sfcdrv_set_cmd_data(uwp5661_info, i, &(cmd_desc[i]));
-		if (retval != ERROR_OK)
-			return retval;
-	}
-
-	retval = target_write_u32(target, SFC_CMD_BUF0 , uwp5661_info->cmd_info_buf_cache[CMD_BUF_0]);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = target_write_u32(target, SFC_TYPE_BUF0, uwp5661_info->cmd_info_buf_cache[INFO_BUF_0]);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = target_write_u32(target, SFC_TYPE_BUF1, TYPE_BUF_DEFAULT_VALUE);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = target_write_u32(target, SFC_TYPE_BUF2, TYPE_BUF_DEFAULT_VALUE);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = sfcdrv_set_cmd_cfg_reg(uwp5661_info, target, CMD_MODE_READ , BIT_MODE_1, INI_CMD_BUF_7);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, CGM_MTX_DIV_2);
-	if (retval != ERROR_OK)
-		return retval;
-	/* set CPU clk to xtal MHz */
-	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_ARM_CFG, CGM_ARM_XTAL_MHZ);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, CGM_MTX_DIV_1);
-	if (retval != ERROR_OK)
-		return retval;
-
-	retval = uwp5661_disable_cache(target);
-	if (retval != ERROR_OK)
-		return retval;
-
-	LOG_DEBUG("Enter XIP");
-
-	return retval;
-}
-
-static int uwp5661_exit_xip(struct uwp5661_flash_bank *uwp5661_info, struct target *target)
-{
-	int retval = ERROR_OK;
-	retval = sfcdrv_set_cmd_cfg_reg(uwp5661_info, target, CMD_MODE_WRITE, BIT_MODE_1, INI_CMD_BUF_7);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, CGM_MTX_DIV_2);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_ARM_CFG, CGM_ARM_XTAL_MHZ);
-	if (retval != ERROR_OK)
-		return retval;
-	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, CGM_MTX_DIV_1);
-	if (retval != ERROR_OK)
-		return retval;
-	LOG_DEBUG("Exit XIP");
-
-	return retval;
-}
-
-static int uwp5661_select_xip(struct uwp5661_flash_bank *uwp5661_info, struct target *target,
-					uint8_t support_4addr, uint32_t op)
-{
-	int retval = ERROR_OK;
-	retval = target_write_u32(target, SFC_INT_CLR , (1 << SHIFT_INT_CLR));
-	if (retval != ERROR_OK)
-		return retval;
-	if (op == true) {
-		retval = uwp5661_enter_xip(uwp5661_info, target, support_4addr);
-		if (retval != ERROR_OK)
-			return retval;
-	} else {
-		retval = uwp5661_exit_xip(uwp5661_info, target);
-		if (retval != ERROR_OK)
-			return retval;
-	}
-
-	return retval;
-}
-
 static enum byte_num uwp5661_flash_addr(uint32_t *addr, uint8_t support_4addr)
 {
 	uint8_t cmd[4] = {0};
@@ -552,9 +462,8 @@ static int uwp5661_cmd_read(struct uwp5661_flash_bank *uwp5661_info, struct targ
 			uint8_t cmd, uint32_t *data_in, uint32_t data_len)
 {
 	int retval = ERROR_OK;
-	struct sfc_cmd_des cmd_desc[4];
+	struct sfc_cmd_des cmd_desc[3];
 	enum byte_num byte_num = BYTE_NUM_1;
-	uint32_t tmp_buf[2] = {0};
 	uint32_t cmd_idx = 0;
 
 	create_cmd(&(cmd_desc[cmd_idx++]), cmd, BYTE_NUM_1, CMD_MODE_WRITE, BIT_MODE_1, SEND_MODE_0);
@@ -563,28 +472,16 @@ static int uwp5661_cmd_read(struct uwp5661_flash_bank *uwp5661_info, struct targ
 		data_len = 8;
 
 	if (data_len > 4) {
-		create_cmd(&(cmd_desc[cmd_idx++]), 0, BYTE_NUM_4, CMD_MODE_READ, BIT_MODE_1, SEND_MODE_0);
+		create_cmd(&(cmd_desc[cmd_idx++]), 0x0, BYTE_NUM_4, CMD_MODE_READ, BIT_MODE_1, SEND_MODE_0);
 		data_len = data_len - 4;
 	}
 
 	if (data_len > 0) {
 		byte_num = BYTE_NUM_1 + (data_len - 1);
-		create_cmd(&(cmd_desc[cmd_idx++]), 0, byte_num  , CMD_MODE_READ, BIT_MODE_1, SEND_MODE_0);
+		create_cmd(&(cmd_desc[cmd_idx++]), 0x0, byte_num  , CMD_MODE_READ, BIT_MODE_1, SEND_MODE_0);
 	}
 
-	retval = uwp5661_read_write(uwp5661_info, target, cmd_desc, cmd_idx, tmp_buf);
-
-	if (cmd_idx > 1)
-		data_in[0] = (((tmp_buf[0] >> 24) & 0xFF) << 0) |
-						(((tmp_buf[0] >> 16) & 0xFF) << 8) |
-						(((tmp_buf[0] >> 8) & 0xFF) << 16) |
-						(((tmp_buf[0] >> 0) & 0xFF) << 24) ;
-
-	if (cmd_idx > 2)
-		data_in[1] = (((tmp_buf[1] >> 24) & 0xFF) << 0) |
-						(((tmp_buf[1] >> 16) & 0xFF) << 8) |
-						(((tmp_buf[1] >> 8) & 0xFF) << 16) |
-						(((tmp_buf[1] >> 0) & 0xFF) << 24) ;
+	retval = uwp5661_read_write(uwp5661_info, target, cmd_desc, cmd_idx, data_in);
 
 	return retval;
 }
@@ -618,6 +515,145 @@ static int uwp5661_cmd_poll_bit(struct uwp5661_flash_bank *uwp5661_info, struct 
 static int uwp5661_write_enable(struct uwp5661_flash_bank *uwp5661_info, struct target *target)
 {
 	return uwp5661_cmd_write(uwp5661_info, target, CMD_WRITE_ENABLE, NULL, 0, BIT_MODE_1);
+}
+
+static int uwp5661_quad_enable(struct uwp5661_flash_bank *uwp5661_info, struct target *target)
+{
+	uint32_t status1 = 0;
+	uint32_t status2 = 0;
+	int retval = ERROR_OK;
+
+	retval = uwp5661_cmd_read(uwp5661_info, target, CMD_READ_STATUS2, &status2, 1);
+	if (retval != ERROR_OK)
+		return retval;
+
+	if ((status2 & STATUS_QE) == 0) {
+		retval = uwp5661_cmd_read(uwp5661_info, target, CMD_READ_STATUS1, &status1, 1);
+		if (retval != ERROR_OK)
+			return retval;
+		status2 |= STATUS_QE;
+		status2 = (status1 & 0xFC) | ((status2 & 0xFF) << 8);
+		retval = uwp5661_write_enable(uwp5661_info, target);
+		if (retval != ERROR_OK)
+			return retval;
+		retval = uwp5661_cmd_read(uwp5661_info, target, CMD_READ_STATUS1, &status1, 1);
+		if (retval != ERROR_OK)
+			return retval;
+		retval = uwp5661_cmd_write(uwp5661_info, target, CMD_WRITE_STATUS, &status2, 2, BIT_MODE_1);
+		if (retval != ERROR_OK)
+			return retval;
+		retval = uwp5661_cmd_poll_bit(uwp5661_info, target, SFC_FLASH_WST_TIMEOUT, CMD_READ_STATUS2, STATUS_QE, 1);
+		if (retval != ERROR_OK) {
+			LOG_ERROR("Setting Quad Enable bit failed");
+		}
+	}
+
+	return retval;
+}
+
+static int uwp5661_enter_xip(struct uwp5661_flash_bank *uwp5661_info, struct target *target, uint8_t support_4addr)
+{
+	int retval = ERROR_OK;
+	uint32_t i = 0;
+	struct sfc_cmd_des cmd_desc[4];
+
+	create_cmd(&(cmd_desc[0]), CMD_4IO_READ , BYTE_NUM_1, CMD_MODE_WRITE, BIT_MODE_1, SEND_MODE_0);
+	create_cmd(&(cmd_desc[1]), 0x0          , (support_4addr == true) ? BYTE_NUM_4 : BYTE_NUM_3,
+															CMD_MODE_WRITE, BIT_MODE_4, SEND_MODE_1);
+	create_cmd(&(cmd_desc[2]), 0xF0         , BYTE_NUM_1, CMD_MODE_WRITE, BIT_MODE_4, SEND_MODE_0);
+	create_cmd(&(cmd_desc[3]), 0x0          , BYTE_NUM_2, CMD_MODE_HIGHZ, BIT_MODE_4, SEND_MODE_0);
+
+	for (i = 0; i < 4; i++) {
+		retval = sfcdrv_set_cmd_data(uwp5661_info, i, &(cmd_desc[i]));
+		if (retval != ERROR_OK)
+			return retval;
+	}
+
+	retval = target_write_u32(target, SFC_CMD_BUF0 , uwp5661_info->cmd_info_buf_cache[CMD_BUF_0]);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = target_write_u32(target, SFC_CMD_BUF1 , TYPE_BUF_DEFAULT_VALUE);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = target_write_u32(target, SFC_CMD_BUF2 , uwp5661_info->cmd_info_buf_cache[CMD_BUF_2]);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = target_write_u32(target, SFC_TYPE_BUF0, uwp5661_info->cmd_info_buf_cache[INFO_BUF_0]);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = target_write_u32(target, SFC_TYPE_BUF1, TYPE_BUF_DEFAULT_VALUE);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = target_write_u32(target, SFC_TYPE_BUF2, TYPE_BUF_DEFAULT_VALUE);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = sfcdrv_set_cmd_cfg_reg(uwp5661_info, target, CMD_MODE_READ , BIT_MODE_4, INI_CMD_BUF_7);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, CGM_MTX_DIV_2);
+	if (retval != ERROR_OK)
+		return retval;
+	/* set CPU clk to xtal MHz */
+	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_ARM_CFG, CGM_ARM_XTAL_MHZ);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, CGM_MTX_DIV_1);
+	if (retval != ERROR_OK)
+		return retval;
+
+	LOG_DEBUG("Enter XIP");
+
+	return retval;
+}
+
+static int uwp5661_exit_xip(struct uwp5661_flash_bank *uwp5661_info, struct target *target)
+{
+	int retval = ERROR_OK;
+	retval = sfcdrv_set_cmd_cfg_reg(uwp5661_info, target, CMD_MODE_WRITE, BIT_MODE_1, INI_CMD_BUF_7);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, CGM_MTX_DIV_2);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_ARM_CFG, CGM_ARM_XTAL_MHZ);
+	if (retval != ERROR_OK)
+		return retval;
+	retval = target_write_u32(target, REG_AON_CLK_RF_CGM_MTX_CFG, CGM_MTX_DIV_1);
+	if (retval != ERROR_OK)
+		return retval;
+
+	LOG_DEBUG("Exit XIP");
+
+	return retval;
+}
+
+static int uwp5661_select_xip(struct uwp5661_flash_bank *uwp5661_info, struct target *target,
+					uint8_t support_4addr, uint32_t op)
+{
+	int retval = ERROR_OK;
+	retval = target_write_u32(target, SFC_INT_CLR , (1 << SHIFT_INT_CLR));
+	if (retval != ERROR_OK)
+		return retval;
+	if (op == true) {
+		retval = uwp5661_exit_xip(uwp5661_info, target);
+		if (retval != ERROR_OK)
+			return retval;
+		retval = uwp5661_quad_enable(uwp5661_info, target);
+		if (retval != ERROR_OK)
+			return retval;
+		retval = uwp5661_enter_xip(uwp5661_info, target, support_4addr);
+		if (retval != ERROR_OK)
+			return retval;
+		retval = uwp5661_disable_cache(target);
+		if (retval != ERROR_OK)
+			return retval;
+	} else {
+		retval = uwp5661_exit_xip(uwp5661_info, target);
+		if (retval != ERROR_OK)
+			return retval;
+	}
+
+	return retval;
 }
 
 static int uwp5661_reset_anyway(struct uwp5661_flash_bank *uwp5661_info, struct target *target)
@@ -655,22 +691,42 @@ static int uwp5661_reset_anyway(struct uwp5661_flash_bank *uwp5661_info, struct 
 
 static int uwp5661_4addr_enable(struct uwp5661_flash_bank *uwp5661_info, struct target *target)
 {
+	uint32_t status3 = 0;
 	int retval = ERROR_OK;
-	retval = uwp5661_cmd_write(uwp5661_info, target, CMD_ENTER_4ADDR, NULL, 0, BIT_MODE_1);
+
+	retval = uwp5661_cmd_read(uwp5661_info, target, CMD_READ_STATUS3, &status3, 1);
 	if (retval != ERROR_OK)
 		return retval;
 
-	return uwp5661_cmd_poll_bit(uwp5661_info, target, SPI_FLASH_ADS_TIMEOUT, CMD_READ_STATUS3, STATUS_ADS, 1);
+	if ((status3 & STATUS_ADS) == 0) {
+		retval = uwp5661_cmd_write(uwp5661_info, target, CMD_ENTER_4ADDR, NULL, 0, BIT_MODE_1);
+		if (retval != ERROR_OK)
+			return retval;
+
+		return uwp5661_cmd_poll_bit(uwp5661_info, target, SPI_FLASH_ADS_TIMEOUT, CMD_READ_STATUS3, STATUS_ADS, 1);
+	}
+
+	return retval;
 }
 
 static int uwp5661_4addr_disable(struct uwp5661_flash_bank *uwp5661_info, struct target *target)
 {
+	uint32_t status3 = 0;
 	int retval = ERROR_OK;
-	retval = uwp5661_cmd_write(uwp5661_info, target, CMD_EXIT_4ADDR, NULL, 0, BIT_MODE_1);
+
+	retval = uwp5661_cmd_read(uwp5661_info, target, CMD_READ_STATUS3, &status3, 1);
 	if (retval != ERROR_OK)
 		return retval;
 
-	return uwp5661_cmd_poll_bit(uwp5661_info, target, SPI_FLASH_ADS_TIMEOUT, CMD_READ_STATUS3, STATUS_ADS, 0);
+	if ((status3 & STATUS_ADS) != 0) {
+		retval = uwp5661_cmd_write(uwp5661_info, target, CMD_EXIT_4ADDR, NULL, 0, BIT_MODE_1);
+		if (retval != ERROR_OK)
+			return retval;
+
+		return uwp5661_cmd_poll_bit(uwp5661_info, target, SPI_FLASH_ADS_TIMEOUT, CMD_READ_STATUS3, STATUS_ADS, 0);
+	}
+
+	return retval;
 }
 
 static int uwp5661_cmd_sector_erase(struct uwp5661_flash_bank *uwp5661_info, struct target *target, uint32_t offset)
@@ -687,8 +743,7 @@ static int uwp5661_cmd_sector_erase(struct uwp5661_flash_bank *uwp5661_info, str
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = uwp5661_cmd_poll_bit(uwp5661_info, target, SPI_FLASH_SECTOR_ERASE_TIMEOUT,
-			CMD_READ_STATUS1, STATUS_WIP, 0);
+	retval = uwp5661_cmd_poll_bit(uwp5661_info, target, SPI_FLASH_SECTOR_ERASE_TIMEOUT, CMD_READ_STATUS1, STATUS_WIP, 0);
 
 	return retval;
 }
@@ -909,7 +964,7 @@ static int uwp5661_write(struct flash_bank *bank, const uint8_t *buffer,
 					(uint8_t *)(buffer + actual), chunk_len);
 
 		if (retval != ERROR_OK) {
-			LOG_ERROR("Flash write failed\n");
+			LOG_ERROR("Flash Write failed\n");
 			break;
 		}
 
@@ -1036,7 +1091,6 @@ static int uwp5661_probe(struct flash_bank *bank)
 	struct uwp5661_flash_bank *uwp5661_info = bank->driver_priv;
 	struct target *target = bank->target;
 	struct uwp_flash *flash = &(uwp5661_info->flash);
-	struct sfc_cmd_des cmd_desc[2];
 	uint32_t read_data;
 	const struct flash_device *p = flash_devices;
 
@@ -1071,28 +1125,23 @@ static int uwp5661_probe(struct flash_bank *bank)
 		return retval;
 
 	/* scan device */
-	create_cmd(&(cmd_desc[0]), CMD_READ_ID, BYTE_NUM_1, CMD_MODE_WRITE, BIT_MODE_1, SEND_MODE_0);
-	create_cmd(&(cmd_desc[1]),           0, BYTE_NUM_3, CMD_MODE_READ , BIT_MODE_1, SEND_MODE_0);
-
-	retval = uwp5661_read_write(uwp5661_info, target, cmd_desc, 2, &read_data);
+	retval = uwp5661_cmd_read(uwp5661_info, target, CMD_READ_ID, &read_data, 3);
 	if (retval != ERROR_OK)
 		return retval;
 
-	buf_bswap32((uint8_t *)&read_data, (uint8_t *)&read_data, 32);
 	for (; p->name ; p++) {
 		if (p->device_id == read_data) {
-			LOG_INFO("find ID: %x", read_data);
 			break;
 		}
 	}
 	if (!p->name) {
-		LOG_ERROR("Unsupported ID : 0x%x", read_data);
+		LOG_ERROR("Unsupported ID: 0x%x", read_data);
 		return ERROR_FAIL;
 	}
 
 	/* config flash and bank*/
 	flash->page_size = p->pagesize;
-	flash->sector_size = p->sectorsize;
+	flash->sector_size = 4096;//fix me! p->sectorsize;
 	flash->support_4addr = (p->size_in_bytes > (1<<24)) ? true : false;
 	bank->num_sectors = p->size_in_bytes / p->sectorsize;
 	bank->sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
