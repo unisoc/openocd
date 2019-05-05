@@ -418,10 +418,11 @@ static enum byte_num uwp5661_flash_addr(uint32_t *addr, uint8_t support_4addr)
 	cmd[3] = ((address >> 24) & (0xFF));
 
 	if (support_4addr == true) {
-		*addr = be_to_h_u32(cmd);
+		*addr = (cmd[3] << 0) | (cmd[2] << 8) |
+				(cmd[1] << 16) | (cmd[0] << 24);
 		return BYTE_NUM_4;
 	} else {
-		*addr = be_to_h_u24(cmd);
+		*addr = (cmd[2] << 0) | (cmd[1] << 8) | (cmd[0] << 16);
 		return BYTE_NUM_3;
 	}
 }
@@ -861,7 +862,7 @@ static int uwp5661_write_page(struct uwp5661_flash_bank *uwp5661_info, struct ta
 		for (j = 0; j < piece_cnt;) {
 			if ((piece_cnt - j) >= 4) {
 				byte_num = BYTE_NUM_4;
-				data_tmp = le_to_h_u32(data);
+				data_tmp = (data[0] << 0) | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
 				data = data + 4;
 				j = j + 4;
 			} else {
@@ -873,11 +874,11 @@ static int uwp5661_write_page(struct uwp5661_flash_bank *uwp5661_info, struct ta
 						break;
 					}
 					case 2: {
-						data_tmp = le_to_h_u32(data);
+						data_tmp = (data[0] << 0) | (data[1] << 8);
 						break;
 					}
 					case 3: {
-						data_tmp = le_to_h_u24(data);
+						data_tmp = (data[0] << 0) | (data[1] << 8) | (data[2] << 16);
 						break;
 					}
 					default:
